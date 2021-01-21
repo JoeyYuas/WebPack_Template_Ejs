@@ -1,8 +1,8 @@
 const path = require("path");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const CopyPlugin = require("copy-webpack-plugin");
-const ImageminPlugin = require("imagemin-webpack-plugin").default;
-const ImageminMozjpeg = require("imagemin-mozjpeg");
+// const ImageminPlugin = require("imagemin-webpack-plugin").default;
+// const ImageminMozjpeg = require("imagemin-mozjpeg");
 const StyleLintPlugin = require("stylelint-webpack-plugin");
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const { CleanWebpackPlugin } = require("clean-webpack-plugin");
@@ -13,7 +13,7 @@ const targetTypes = { ejs : 'html', js : 'js' };
 const getEntriesList = (targetTypes) => {
   const entriesList = {};
   for(const [ srcType, targetType ] of Object.entries(targetTypes)) {
-    const filesMatched = globule.find([`**/*.${srcType}`, `!**/_*.${srcType}`], { cwd : `${__dirname}/src` });
+    const filesMatched = globule.find([`**/*.${srcType}`, `**/**/*.${srcType}`, `!**/_*.${srcType}`], { cwd : `${__dirname}/src` });
 
     for(const srcName of filesMatched) {
       const targetName = srcName.replace(new RegExp(`.${srcType}$`, 'i'), `.${targetType}`);
@@ -23,17 +23,27 @@ const getEntriesList = (targetTypes) => {
   return entriesList;
 };
 
+console.log(__dirname)
 const app = {
   mode: "production",
 
   //entry: "./src/index.js",
-  entry: "./src/index.ts",
+  // entry: "./src/index.ts",
+
+  entry: {
+    common: "./src/common/ts/app.ts",
+    30: "./src/30/ts/app.ts",
+    52: "./src/52/ts/app.ts",
+    // 追加したいディレクトリをここに追記していく
+  },
 
   devtool: "source-map",
 
   output: {
     path: path.resolve(__dirname, "dist"),
-    filename: "js/main.js?[hash]"
+    filename: (pathData) => {
+      return pathData.chunk.name === 'common' ? "common/js/app.js?[hash]" : "[name]/js/app.js?[hash]";
+    },
   },
 
   module: {
@@ -117,35 +127,8 @@ const app = {
   plugins: [
     new CleanWebpackPlugin({ verbose: true }),
     new MiniCssExtractPlugin({
-      filename: "css/style.css?[hash]"
+      filename: "[name]/css/style.css?[hash]"
     }),
-
-    // new CopyPlugin({
-    //   patterns: [
-    //     { from: "src/img", to: "img" },
-    //     { from: "./src/favicon.png", to: "favicon.png" },
-    //     { from: "./src/favicon.svg", to: "favicon.svg" }
-    //   ]
-    // }),
-
-    // new ImageminPlugin({
-    //   test: /\.(jpe?g|png|gif|svg)$/i,
-    //   pngquant: {
-    //     quality: "70-80"
-    //   },
-    //   gifsicle: {
-    //     interlaced: false,
-    //     optimizationLevel: 10,
-    //     colors: 256
-    //   },
-    //   svgo: {},
-    //   plugins: [
-    //     ImageminMozjpeg({
-    //       quality: 85,
-    //       progressive: true
-    //     })
-    //   ]
-    // }),
 
     new StyleLintPlugin({
       configFile: ".stylelintrc",
@@ -159,11 +142,29 @@ const app = {
   }
 };
 
-for(const [ targetName, srcName ] of Object.entries(getEntriesList({ ejs : 'html' }))) {
-  app.plugins.push(new HtmlWebpackPlugin({
-    filename : targetName,
-    template : srcName
-  }));
-};
+Object.keys(app.entry).forEach((key) => {
+  app.plugins.push(
+    new HtmlWebpackPlugin({
+      template: (key==='common') ?  './src/index.ejs' : './src/' + key + '/index.ejs', // Source
+      filename: (key==='common') ?  './index.html' : './' + key + '/index.html', // Dist
+      inject: true,
+      chunks: [key], // insert to the root of output folder
+    })
+  );
+})
+
+/** Imageのコピー */
+const assetList = []
+Object.keys(app.entry).forEach((key) => {
+  assetList.push(
+    { from: './src/' + key + '/asset/', to: './' + key + '/asset' }
+  )
+})
+console.log(assetList)
+app.plugins.push(
+  new CopyPlugin({
+    patterns: assetList
+  })
+)
 
 module.exports = app;
